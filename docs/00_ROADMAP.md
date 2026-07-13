@@ -11,15 +11,28 @@ screens. Status is updated as work lands.
 - Prisma domain schema (zones, catalogue, group deals, orders, payments, delivery, audit, staff).
 - Group-deal **state machine** (tip/fail/threshold/transitions) as pure logic — **tested, passing (7 tests)**.
 
-## Phase 1 — Backend core (next)
-- NestJS app wiring: config, Prisma module, health check, `/api/v1` prefix.
-- Phone-OTP auth (dev OTP stub; no SMS provider connected).
-- Catalogue module (products, bundles) + seed script with clearly-labelled **sample data**.
-- Group-buying module: create deal, join (place order), progress, and the scheduled
-  **cut-off job** (Redis/BullMQ) that runs `decideTip` and drives CONFIRM/FAIL + refund.
-- `PaymentProvider` interface + manual/assisted-MoMo implementation (proof + staff verify).
-- API contract package (`packages/contract`) as the frozen V1 surface.
-- Automated tests for the join→tip→confirm and join→fail→refund paths against a test DB.
+## Phase 1 — Backend core ✅ (done)
+- NestJS app wiring: config, global Prisma module, health check (DB-aware), `/api/v1` prefix,
+  whitelist ValidationPipe, BigInt-safe JSON — **boots, health green**.
+- Phone-OTP auth (dev returns code; no SMS/WhatsApp provider connected) — **verified over HTTP**.
+- Catalogue module (zone deal discovery with honest savings, products, bundles) + seed with
+  clearly-labelled **[SAMPLE]** data — **verified over HTTP**.
+- Group-buying module: join (place order), honest progress, and the scheduled **cut-off
+  sweep** that runs `decideTip` and drives CONFIRM / FAIL + auto-refund — **all paths
+  verified against a live Postgres**: tip→confirm, fail→refund (order+payment REFUNDED,
+  audit event, configurable trust-first MoMo default).
+- Pluggable **PaymentProvider** interface + manual-MoMo launch provider + config-selected
+  registry (ADR-0008) — verified.
+- Configurable **pricing engine** (ADR-0010) and **policy-driven refunds** (ADR-0011) —
+  unit-tested + exercised live (free-delivery threshold and group drop-point fee both fired).
+- Generalized **multi-strategy fulfilment** (ADR-0009): FulfilmentMode + Location + Address.
+- Tests: 17 unit tests passing (money, state machine, pricing/refund); full HTTP e2e of
+  discovery, OTP, join, tip, fail-refund.
+
+Deferred within Phase 1 (small, non-blocking): move cut-off from a 60s poll to Redis/BullMQ
+per-deal jobs; `packages/contract` extraction; SMS/WhatsApp OTP delivery provider; staff
+JWT + RBAC guards on admin/staff endpoints (endpoints exist; guard layer lands with Phase 3
+admin). These are logged here so they are not forgotten.
 
 ## Phase 2 — Customer web (thin, fast)
 - Next.js: zone selection, deal discovery, join a deal, cart, checkout (manual MoMo),
@@ -50,5 +63,8 @@ screens. Status is updated as work lands.
 See [08 Payments](product/08_PAYMENTS.md) and [03 Model](product/03_GROUP_BUYING_MODEL.md).
 
 ## Current status snapshot
-**Phase 0 complete.** Nothing is deployed. No paid services, real customer data, or real
-payment credentials are in use. Tested code: `@khrate/money`, deal state machine.
+**Phase 0 & 1 complete.** The backend runs: a customer can log in by phone OTP, discover
+zone deals, join a group deal, and the cut-off engine confirms winners and auto-refunds
+failures — all against a live Postgres, all audited. Nothing is deployed. No paid services,
+real customer data, or real payment credentials are in use. 17 unit tests + full HTTP e2e green.
+**Next: Phase 2 — the customer web app.**

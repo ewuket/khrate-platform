@@ -1,0 +1,26 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: khrate-postgres
+    environment:
+      POSTGRES_USER: khrate
+      POSTGRES_PASSWORD: khrate
+      POSTGRES_DB: khrate
+    ports:
+      - "5434:5432"
+    volumes:
+      - khrate_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U khrate"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: khrate-redis
+    ports:
+      - "6381:6379"
+
+volumes:
+  khrate_pg:

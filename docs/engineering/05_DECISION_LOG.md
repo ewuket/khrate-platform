@@ -4,6 +4,40 @@ Append-only record of meaningful decisions. Newest at top. Format: context → d
 
 ---
 
+### ADR-0011 — Configurable refund policy, not hardcoded (founder-directed)
+**Decision:** Refund handling supports both MoMo refund and wallet credit; the *default*
+behaviour is a runtime `Policy` value (`refund.default`), not a code constant. Launch
+default = instant MoMo refund (trust-first); the business can change it later without a deploy.
+**Why:** Founder clarification #3. Trust matters most at launch; economics may shift later.
+**Status:** Accepted.
+
+### ADR-0010 — Pricing engine, not hardcoded fees (founder-directed)
+**Decision:** Delivery/service fees come from a configurable **pricing engine** (`PricingRule`
+records evaluated in order), never literals in code. Rules can key off fulfilment mode,
+zone, order value, group vs solo, and density. Pure, testable resolver.
+**Why:** Founder clarification #4. KHRATE will learn its true unit economics over time; pricing
+must evolve as data, not code changes.
+**Status:** Accepted. Supersedes the "flat fee" assumption in earlier docs.
+
+### ADR-0009 — Pluggable multi-strategy fulfilment (founder-directed)
+**Decision:** Fulfilment is a first-class, extensible concept: a `FulfilmentMode`
+(HOME_DELIVERY, DROP_POINT, APARTMENT, OFFICE, CAMPUS, PICKUP_LOCATION, …) plus a `Location`
+(a served place) or a customer `Address` (home). A deal offers one or more `FulfilmentOption`s;
+an order chooses one. Adding a new operational model is data + (if needed) a new enum value,
+not an architectural change.
+**Why:** Founder clarification #1. Neighbourhood drop is the *launch* efficiency play, not the
+only model. KHRATE must evolve operationally without a rewrite.
+**Status:** Accepted. Generalises the earlier DropZone-only design.
+
+### ADR-0008 — Payment providers fully pluggable (founder-directed, reaffirms ADR-0006)
+**Decision:** All payment behaviour behind `PaymentProvider`; providers are registered and
+selected by config. Launch = `MOMO_MANUAL`. Adding MTN MoMo / Airtel / others = a new provider
+class + config, zero changes to order/deal logic.
+**Why:** Founder clarification #2.
+**Status:** Accepted.
+
+---
+
 ### ADR-0007 — Zone-based deals now; live GPS tracking later
 **Decision:** Deliveries target Drop Zones with scheduled bulk drops; no per-order live GPS at launch.
 **Why:** The density/pre-sell model does not need real-time tracking to work, and GPS

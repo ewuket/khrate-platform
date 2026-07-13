@@ -28,36 +28,78 @@ model Zone {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
 
-  dropZones DropZone[]
+  locations Location[]
   deals     GroupDeal[]
   customers Customer[]
+  addresses Address[]
 }
 
-/// A concrete place a single bulk delivery can go: an estate, office, campus, or a
-/// customer-defined pickup point. The atom of dense, cheap logistics.
-model DropZone {
-  id        String       @id @default(cuid())
+/// A served place a fulfilment can target: a neighbourhood drop point, an apartment
+/// complex, an office, a campus, or a staffed pickup location. The atom of dense
+/// logistics — but NOT the only fulfilment model (see FulfilmentMode / ADR-0009).
+model Location {
+  id        String        @id @default(cuid())
   zoneId    String
-  zone      Zone         @relation(fields: [zoneId], references: [id])
-  name      String       // e.g. "Kimironko Estate — Gate B"
-  kind      DropZoneKind @default(ESTATE)
+  zone      Zone          @relation(fields: [zoneId], references: [id])
+  name      String        // e.g. "Kimironko Estate — Gate B"
+  // The operational model this location supports. Extensible: adding a model is a new
+  // enum value + data, not an architectural change.
+  mode      FulfilmentMode @default(DROP_POINT)
   address   String?
   // Coarse geo for planning; not live tracking (see ADR-0007).
   lat       Float?
   lng       Float?
-  isActive  Boolean      @default(true)
-  createdAt DateTime     @default(now())
+  isActive  Boolean       @default(true)
+  createdAt DateTime      @default(now())
 
-  deals     GroupDeal[]
+  options   FulfilmentOption[]
   orders    Order[]
 }
 
-enum DropZoneKind {
-  ESTATE
-  OFFICE
-  CAMPUS
-  PICKUP_POINT
-  CUSTOM // customer-created private circle drop
+/// How groceries reach a customer. Pluggable — KHRATE evolves operationally by adding
+/// modes and options, never by re-architecting (founder clarification #1 / ADR-0009).
+enum FulfilmentMode {
+  HOME_DELIVERY   // to a customer Address
+  DROP_POINT      // neighbourhood bulk drop, members collect
+  APARTMENT       // delivered within an apartment complex
+  OFFICE          // to an office reception/drop
+  CAMPUS          // to a university campus point
+  PICKUP_LOCATION // customer collects from a staffed KHRATE point
+}
+
+/// A customer's saved delivery address (for HOME_DELIVERY and future modes).
+model Address {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+  zoneId     String?
+  zone       Zone?    @relation(fields: [zoneId], references: [id])
+  label      String?  // "Home", "Work"
+  line1      String
+  line2      String?
+  landmark   String?  // Kigali reality: landmarks matter more than street numbers
+  lat        Float?
+  lng        Float?
+  createdAt  DateTime @default(now())
+
+  orders     Order[]
+}
+
+/// A fulfilment choice offered on a deal: a mode, optionally bound to a Location, with an
+/// optional pricing-rule reference. A deal exposes one or more; the order picks exactly one.
+model FulfilmentOption {
+  id           String        @id @default(cuid())
+  dealId       String
+  deal         GroupDeal     @relation(fields: [dealId], references: [id])
+  mode         FulfilmentMode
+  locationId   String?
+  location     Location?     @relation(fields: [locationId], references: [id])
+  // Optional override; when null the pricing engine's default rules for this mode apply.
+  pricingRuleId String?
+  pricingRule   PricingRule? @relation(fields: [pricingRuleId], references: [id])
+  isActive     Boolean       @default(true)
+
+  orders       Order[]
 }
 
 // ---------------------------------------------------------------------------
@@ -77,6 +119,7 @@ model Customer {
   orders          Order[]
   organisedDeals  GroupDeal[] @relation("DealOrganiser")
   otpChallenges   OtpChallenge[]
+  addresses       Address[]
 }
 
 /// One-time passcodes for phone login (SMS/WhatsApp). Short-lived, single-use.
@@ -176,8 +219,6 @@ model GroupDeal {
   title        String
   zoneId       String
   zone         Zone          @relation(fields: [zoneId], references: [id])
-  dropZoneId   String
-  dropZone     DropZone      @relation(fields: [dropZoneId], references: [id])
   currency     String        @default("RWF")
 
   visibility   DealVisibility @default(PUBLIC)
@@ -200,6 +241,7 @@ model GroupDeal {
   lines        DealLine[]
   orders       Order[]
   events       TimelineEvent[]
+  fulfilmentOptions FulfilmentOption[]
 }
 
 enum DealVisibility {
@@ -249,9 +291,18 @@ model Order {
   // Group order (dealId set) or solo order (dealId null, deliver to me).
   dealId       String?
   deal         GroupDeal?  @relation(fields: [dealId], references: [id])
-  dropZoneId   String?
-  dropZone     DropZone?   @relation(fields: [dropZoneId], references: [id])
   currency     String      @default("RWF")
+
+  // How this order is fulfilled. Exactly one path is used per order:
+  //  - a chosen FulfilmentOption (group deals expose the allowed options), and/or
+  //  - a Location (drop point / office / campus / pickup) OR an Address (home delivery).
+  fulfilmentMode     FulfilmentMode @default(DROP_POINT)
+  fulfilmentOptionId String?
+  fulfilmentOption   FulfilmentOption? @relation(fields: [fulfilmentOptionId], references: [id])
+  locationId   String?
+  location     Location?   @relation(fields: [locationId], references: [id])
+  addressId    String?
+  address      Address?    @relation(fields: [addressId], references: [id])
 
   subtotal     BigInt      @default(0)
   deliveryFee  BigInt      @default(0)
@@ -370,4 +421,61 @@ model TimelineEvent {
   @@index([dealId])
   @@index([orderId])
   @@index([type])
+}
+
+// ---------------------------------------------------------------------------
+// Configuration — pricing engine & policies. Business rules as DATA, not code
+// (founder clarifications #3 & #4 / ADR-0010, ADR-0011).
+// ---------------------------------------------------------------------------
+
+/// A configurable delivery/service pricing rule. Rules are evaluated in `priority`
+/// order (lowest first); the first whose conditions match sets the fee. Conditions and
+/// fee computation are interpreted by the pure PricingEngine (see pricing-engine.ts).
+model PricingRule {
+  id          String   @id @default(cuid())
+  zoneId      String?  // null = applies to all zones
+  name        String
+  priority    Int      @default(100)
+  isActive    Boolean  @default(true)
+  currency    String   @default("RWF")
+
+  // Match conditions (null = "any"). Kept explicit & simple so the engine stays pure.
+  mode        FulfilmentMode?
+  groupOnly   Boolean? // true = only group orders, false = only solo, null = both
+  minOrderValue BigInt? // apply only if order subtotal >= this (minor units)
+
+  // Fee computation: base + (percentBps/10000 * subtotal), then clamped to [min,max].
+  baseFee     BigInt   @default(0)
+  percentBps  Int      @default(0) // basis points of subtotal
+  minFee      BigInt?
+  maxFee      BigInt?
+  // Free delivery when subtotal >= this threshold (null = never free by threshold).
+  freeAboveValue BigInt?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  options     FulfilmentOption[]
+}
+
+/// Key/value business policy, editable without a deploy. Examples:
+///   refund.default = "MOMO_REFUND" | "WALLET_CREDIT"
+///   organiser.reward.capMinor = "5000"
+model Policy {
+  key         String   @id
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt
+}
+
+/// A customer's refundable wallet credit balance (per currency). Refunds may land here
+/// when policy or customer choice selects wallet credit over a MoMo refund.
+model WalletCredit {
+  id         String   @id @default(cuid())
+  customerId String
+  currency   String   @default("RWF")
+  balance    BigInt   @default(0) // minor units
+  updatedAt  DateTime @updatedAt
+
+  @@unique([customerId, currency])
 }
