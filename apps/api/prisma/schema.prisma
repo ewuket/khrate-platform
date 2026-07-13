@@ -1,0 +1,373 @@
+// KHRATE data model. See docs/engineering/09_DATA_MODEL.md for the narrative.
+//
+// Conventions:
+//  - Money = integer minor units (BigInt) + a currency column alongside. RWF has no
+//    minor unit. NEVER floats. See packages/money.
+//  - Every meaningful event → an append-only TimelineEvent (audit / ops / analytics).
+//  - Multi-zone & multi-currency ready: Zone and currency are first-class.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Geography — the unit of the group-buying model and of expansion.
+// ---------------------------------------------------------------------------
+
+/// A market area (e.g. "Kigali"). Carries the operating currency. Expansion = new Zone.
+model Zone {
+  id        String   @id @default(cuid())
+  name      String
+  country   String   @default("RW")
+  currency  String   @default("RWF")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  dropZones DropZone[]
+  deals     GroupDeal[]
+  customers Customer[]
+}
+
+/// A concrete place a single bulk delivery can go: an estate, office, campus, or a
+/// customer-defined pickup point. The atom of dense, cheap logistics.
+model DropZone {
+  id        String       @id @default(cuid())
+  zoneId    String
+  zone      Zone         @relation(fields: [zoneId], references: [id])
+  name      String       // e.g. "Kimironko Estate — Gate B"
+  kind      DropZoneKind @default(ESTATE)
+  address   String?
+  // Coarse geo for planning; not live tracking (see ADR-0007).
+  lat       Float?
+  lng       Float?
+  isActive  Boolean      @default(true)
+  createdAt DateTime     @default(now())
+
+  deals     GroupDeal[]
+  orders    Order[]
+}
+
+enum DropZoneKind {
+  ESTATE
+  OFFICE
+  CAMPUS
+  PICKUP_POINT
+  CUSTOM // customer-created private circle drop
+}
+
+// ---------------------------------------------------------------------------
+// People — customers and staff.
+// ---------------------------------------------------------------------------
+
+model Customer {
+  id            String   @id @default(cuid())
+  // Phone is the identity (ADR-0004). E.164, e.g. +2507XXXXXXXX.
+  phone         String   @unique
+  name          String?
+  phoneVerified Boolean  @default(false)
+  zoneId        String?
+  zone          Zone?    @relation(fields: [zoneId], references: [id])
+  createdAt     DateTime @default(now())
+
+  orders          Order[]
+  organisedDeals  GroupDeal[] @relation("DealOrganiser")
+  otpChallenges   OtpChallenge[]
+}
+
+/// One-time passcodes for phone login (SMS/WhatsApp). Short-lived, single-use.
+model OtpChallenge {
+  id         String    @id @default(cuid())
+  customerId String
+  customer   Customer  @relation(fields: [customerId], references: [id])
+  codeHash   String    // never store the raw code
+  expiresAt  DateTime
+  consumedAt DateTime?
+  attempts   Int       @default(0)
+  createdAt  DateTime  @default(now())
+}
+
+/// Internal users of the admin/ops platform. Role-based least privilege.
+model StaffUser {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  passwordHash String
+  role         StaffRole
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+}
+
+enum StaffRole {
+  ADMIN               // full access
+  CATALOGUE_MANAGER   // products, bundles, prices
+  GROUP_COORDINATOR   // creates/seeds & runs group deals
+  ORDER_OPS           // order preparation, packing, substitutions
+  PAYMENT_REVIEWER    // verifies MoMo payments / proofs
+  FINANCE             // refunds, payouts, reports
+  DELIVERY_COORDINATOR
+  SUPPORT
+  DRIVER
+}
+
+// ---------------------------------------------------------------------------
+// Catalogue — products and curated bundles. Handles grocery reality.
+// ---------------------------------------------------------------------------
+
+model Product {
+  id           String      @id @default(cuid())
+  name         String
+  description  String?
+  category     String
+  imageUrl     String?
+  // How the product is sold — drives quantity UX and weight handling.
+  saleUnit     SaleUnit    @default(EACH)
+  // For weight-sold items: nominal grams per unit for display/estimation.
+  nominalGrams Int?
+  isFresh      Boolean     @default(false)
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+
+  dealLines    DealLine[]
+  bundleItems  BundleItem[]
+}
+
+enum SaleUnit {
+  EACH   // sold individually
+  KG     // sold by weight
+  BUNCH
+  PACK
+}
+
+/// A curated set of products at a set price (family pack, student pack, office pack…).
+model Bundle {
+  id          String       @id @default(cuid())
+  name        String
+  description String?
+  imageUrl    String?
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+
+  items       BundleItem[]
+  dealLines   DealLine[]
+}
+
+model BundleItem {
+  id        String  @id @default(cuid())
+  bundleId  String
+  bundle    Bundle  @relation(fields: [bundleId], references: [id])
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  quantity  Int     // units of the product in this bundle
+}
+
+// ---------------------------------------------------------------------------
+// Group buying — the core. See docs/product/03_GROUP_BUYING_MODEL.md.
+// ---------------------------------------------------------------------------
+
+/// An offer of specific lines at a group price, tied to a drop zone, open until a
+/// cut-off, that "tips" only if a threshold of demand is met. Threshold=1 => always tips.
+model GroupDeal {
+  id           String        @id @default(cuid())
+  title        String
+  zoneId       String
+  zone         Zone          @relation(fields: [zoneId], references: [id])
+  dropZoneId   String
+  dropZone     DropZone      @relation(fields: [dropZoneId], references: [id])
+  currency     String        @default("RWF")
+
+  visibility   DealVisibility @default(PUBLIC)
+  // Optional community organiser (may be a customer or a KHRATE coordinator seat).
+  organiserId  String?
+  organiser    Customer?     @relation("DealOrganiser", fields: [organiserId], references: [id])
+
+  openedAt     DateTime      @default(now())
+  cutoffAt     DateTime
+  // Deal tips when EITHER threshold is satisfied (whichever is set). Both null => 1 unit.
+  minUnits     Int?
+  minValue     BigInt?       // in minor units of `currency`
+
+  deliveryAt   DateTime?     // planned bulk drop time
+  state        DealState     @default(OPEN)
+
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  lines        DealLine[]
+  orders       Order[]
+  events       TimelineEvent[]
+}
+
+enum DealVisibility {
+  PUBLIC   // discoverable by anyone in the zone
+  PRIVATE  // invite-only circle (family/friends/office), joined via link/code
+}
+
+/// The lifecycle. Transitions are explicit and logged (see GroupDealService).
+enum DealState {
+  OPEN            // accepting orders
+  LOCKED          // past cut-off, tip decision pending
+  CONFIRMED       // tipped: payments captured, procurement authorised
+  PROCURING       // buying & packing
+  OUT_FOR_DELIVERY
+  FULFILLED       // delivered to drop zone
+  FAILED          // threshold not met -> auto refund/release
+  CANCELLED       // staff-cancelled
+}
+
+/// A priced line within a deal. Group price is what members pay; solo price is the
+/// honest reference for the displayed saving (must be a real solo price — no fakes).
+model DealLine {
+  id         String   @id @default(cuid())
+  dealId     String
+  deal       GroupDeal @relation(fields: [dealId], references: [id])
+  // Exactly one of productId / bundleId is set.
+  productId  String?
+  product    Product?  @relation(fields: [productId], references: [id])
+  bundleId   String?
+  bundle     Bundle?   @relation(fields: [bundleId], references: [id])
+
+  groupPrice BigInt    // minor units
+  soloPrice  BigInt    // minor units (honest reference)
+  currency   String    @default("RWF")
+
+  orderItems OrderItem[]
+}
+
+// ---------------------------------------------------------------------------
+// Orders, payments, delivery.
+// ---------------------------------------------------------------------------
+
+model Order {
+  id           String      @id @default(cuid())
+  customerId   String
+  customer     Customer    @relation(fields: [customerId], references: [id])
+  // Group order (dealId set) or solo order (dealId null, deliver to me).
+  dealId       String?
+  deal         GroupDeal?  @relation(fields: [dealId], references: [id])
+  dropZoneId   String?
+  dropZone     DropZone?   @relation(fields: [dropZoneId], references: [id])
+  currency     String      @default("RWF")
+
+  subtotal     BigInt      @default(0)
+  deliveryFee  BigInt      @default(0)
+  total        BigInt      @default(0)
+
+  state        OrderState  @default(PENDING)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  items        OrderItem[]
+  payment      Payment?
+  delivery     Delivery?
+  events       TimelineEvent[]
+}
+
+enum OrderState {
+  PENDING          // created, awaiting payment authorisation
+  AWAITING_TIP     // paid/held, waiting for the deal to tip
+  CONFIRMED        // deal tipped (or solo confirmed), payment captured
+  PREPARING
+  READY
+  DELIVERED
+  COLLECTED
+  REFUNDED
+  CANCELLED
+}
+
+model OrderItem {
+  id         String    @id @default(cuid())
+  orderId    String
+  order      Order     @relation(fields: [orderId], references: [id])
+  dealLineId String
+  dealLine   DealLine  @relation(fields: [dealLineId], references: [id])
+  quantity   Int
+  unitPrice  BigInt    // minor units, snapshot at order time
+  lineTotal  BigInt    // minor units
+  // Fresh/weight fulfilment reality: what was actually packed may differ.
+  fulfilledQuantity Int?
+  substitutionNote  String?
+}
+
+model Payment {
+  id           String        @id @default(cuid())
+  orderId      String        @unique
+  order        Order         @relation(fields: [orderId], references: [id])
+  currency     String        @default("RWF")
+  amount       BigInt
+  method       PaymentMethod @default(MOMO_MANUAL)
+  state        PaymentState  @default(PENDING)
+  // MoMo reference / proof (launch: customer-supplied ref or uploaded proof, staff-verified).
+  providerRef  String?
+  proofUrl     String?
+  verifiedById String?       // StaffUser id (PAYMENT_REVIEWER)
+  capturedAt   DateTime?
+  refundedAt   DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+enum PaymentMethod {
+  MOMO_MANUAL   // launch: MoMo transfer + reference/proof, staff-verified
+  MOMO_API      // scale: MTN MoMo Collections
+  AIRTEL_MONEY
+  CASH_ON_COLLECT
+  WALLET_CREDIT // refund credit reused
+}
+
+enum PaymentState {
+  PENDING
+  HELD        // authorised/reserved, not captured (awaiting tip)
+  CAPTURED
+  FAILED
+  REFUNDED
+}
+
+model Delivery {
+  id           String         @id @default(cuid())
+  orderId      String         @unique
+  order        Order          @relation(fields: [orderId], references: [id])
+  driverId     String?        // StaffUser (DRIVER)
+  state        DeliveryState  @default(SCHEDULED)
+  scheduledFor DateTime?
+  confirmedAt  DateTime?
+  confirmedBy  String?        // who confirmed collection/receipt
+  note         String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+}
+
+enum DeliveryState {
+  SCHEDULED
+  PACKED
+  OUT_FOR_DELIVERY
+  DELIVERED
+  COLLECTED
+  FAILED
+}
+
+// ---------------------------------------------------------------------------
+// Audit trail — the backbone of ops, analytics, and fraud investigation.
+// ---------------------------------------------------------------------------
+
+/// Append-only. Every meaningful event references what it happened to.
+model TimelineEvent {
+  id         String   @id @default(cuid())
+  type       String   // e.g. "DEAL_TIPPED", "PAYMENT_CAPTURED", "REFUND_ISSUED"
+  dealId     String?
+  deal       GroupDeal? @relation(fields: [dealId], references: [id])
+  orderId    String?
+  order      Order?     @relation(fields: [orderId], references: [id])
+  // Who caused it: a StaffUser id, a Customer id, or "system".
+  actor      String   @default("system")
+  data       Json?    // structured context (amounts, states, reason)
+  createdAt  DateTime @default(now())
+
+  @@index([dealId])
+  @@index([orderId])
+  @@index([type])
+}
