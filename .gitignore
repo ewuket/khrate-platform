@@ -16,3 +16,6 @@ apps/mobile/build/
 apps/mobile/.flutter-plugins*
 # Local operational storage (payment proofs, uploads) — never commit real data
 .khrate-storage/
+
+# Next.js generated
+next-env.d.ts

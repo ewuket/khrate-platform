@@ -1,25 +1,27 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { GroupBuyingService } from './group-buying.service';
 import { JoinDealDto } from './dto';
 import { FulfilmentMode } from '../pricing/fulfilment';
+import { CurrentCustomer, CustomerGuard, CustomerPrincipal } from '../auth/customer-auth';
 
-/** Customer-facing group-buying endpoints. Auth guard added with the auth module. */
+/** Customer-facing group-buying endpoints. */
 @Controller('deals')
 export class GroupBuyingController {
   constructor(private readonly groupBuying: GroupBuyingService) {}
 
-  /** Honest live progress toward tipping. */
+  /** Honest live progress toward tipping. Public — anyone can see a deal fill up. */
   @Get(':id/progress')
   progress(@Param('id') id: string) {
     return this.groupBuying.progress(id);
   }
 
-  /** Join a deal (place a group order). */
+  /** Join a deal (place a group order). Uses the authenticated customer — never a body id. */
   @Post(':id/join')
-  join(@Param('id') id: string, @Body() dto: JoinDealDto) {
+  @UseGuards(CustomerGuard)
+  join(@Param('id') id: string, @Body() dto: JoinDealDto, @CurrentCustomer() me: CustomerPrincipal) {
     return this.groupBuying.join({
       dealId: id,
-      customerId: dto.customerId,
+      customerId: me.customerId,
       lines: dto.lines,
       fulfilmentMode: dto.fulfilmentMode as FulfilmentMode,
       fulfilmentOptionId: dto.fulfilmentOptionId,

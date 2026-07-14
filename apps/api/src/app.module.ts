@@ -7,6 +7,7 @@ import { CatalogueModule } from './catalogue/catalogue.module';
 import { PaymentsModule } from './payments/payments.module';
 import { GroupBuyingModule } from './group-buying/group-buying.module';
 import { AdminModule } from './admin/admin.module';
+import { CustomerModule } from './customer/customer.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -19,6 +20,7 @@ import { HealthController } from './health.controller';
     PaymentsModule,
     GroupBuyingModule,
     AdminModule,
+    CustomerModule,
   ],
   controllers: [HealthController],
 })

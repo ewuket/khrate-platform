@@ -58,11 +58,27 @@ KHRATE is an operations business. The internal platform now covers the full oper
 - Next.js admin app (12 routes, all <90 kB first load) on KHRATE orange tokens — **builds,
   driven live in-browser**.
 
-## Phase 3 — Customer web (thin, fast)
-- Next.js: zone selection, deal discovery, join a deal, cart, checkout (manual MoMo),
-  order status, WhatsApp-share invite. Built on the design tokens (KHRATE orange).
-- Works on weak data / low-end devices; PWA-capable. Now sits on **working** business
-  capabilities (verified payment, packing, delivery) rather than stubs.
+## Phase 3 — Customer web ✅ (done)
+`apps/web` (Next.js, KHRATE orange, phone-first, ~90 kB first load). Complete connected
+journeys against the real backend (ADR-0013, ADR-0014):
+- **Landing → location → shop**: 5-second pitch, real zone/drop-point picker, deal list with
+  honest inline progress ("be the first to join", never fake counts).
+- **Deal → join**: quantity steppers, refund reassurance, drop-point choice, live total.
+  Selection survives the sign-in bounce (sessionStorage).
+- **Phone-OTP sign-in**: two calm steps; dev code surfaced (clearly labelled), never in prod.
+  Join requires the JWT — `customerId` never comes from the body.
+- **Checkout**: manual-MoMo instructions + reference capture. No fake "instant" confirmation.
+- **Order tracking**: operational states translated to a 6-stage plain-language timeline;
+  WhatsApp share appears while the group is gathering.
+
+**Verified end-to-end in a real mobile browser (375×812) against live Postgres**, and
+cross-checked in the backend + admin: landing → pick Kigali → open deal → add items
+(RWF total correct) → OTP sign-in → join (real order created) → MoMo checkout → submit
+reference → tracking shows "confirming payment". The order then appeared in the admin
+Payment Review queue with the **exact reference typed in the browser**; a reviewer verified
+it; the customer's tracking advanced to "gathering the group" and the shop honestly showed
+the deal unlocked (1 real participant, 100%). Full audit trail attributes each action to the
+customer or the named reviewer.
 
 ## Phase 4 — Flutter mobile (Android-first, then iOS)
 - Consumes the frozen V1 API. Native feel, offline tolerance, push (FCM), WhatsApp share.
@@ -84,14 +100,17 @@ KHRATE is an operations business. The internal platform now covers the full oper
 See [08 Payments](product/08_PAYMENTS.md) and [03 Model](product/03_GROUP_BUYING_MODEL.md).
 
 ## Current status snapshot
-**Phase 0, 1 & 2 complete** (Phase 2 = admin/ops, resequenced ahead of customer web per
-ADR-0012). The business can now be *operated*: staff sign in under least-privilege roles and
-run the full day — create deals, verify MoMo payments, pull the procurement buy list, pack
-orders (blocked until payment is verified), schedule and confirm deliveries, and read the few
-metrics that matter — every mutation audited to a named actor. The customer-side engine
-(OTP, discovery, join, cut-off tip/fail + auto-refund) remains green underneath.
+**Phases 0–3 complete.** KHRATE now has a working three-surface platform on one API:
+- **Customer web** — discover → join a group deal → pay by MoMo → track the order.
+- **Admin/ops** — the full operating day: deal board, payment verification, procurement,
+  packing, deliveries, reports, configurable policies.
+- **Backend** — group-buying engine (tip/fail + auto-refund), pluggable payments,
+  configurable pricing/refunds, phone-OTP + staff RBAC, append-only audit.
 
-The full operating-day loop was driven end-to-end this session over HTTP **and** through the
-admin UI in a real browser against live Postgres. Nothing is deployed; no paid services, real
-customer data, or real payment credentials are in use. **Next: Phase 3 — the customer web app**,
-now built on working operational capabilities rather than stubs.
+A single customer journey was driven through a **real mobile browser** and followed all the
+way into the **admin platform and database**: the order a customer placed on the web showed
+up in the staff payment queue with the reference they typed, a reviewer verified it, and the
+customer's tracking advanced — every step audited to a named actor. Nothing is deployed; no
+paid services, real customer data, or real payment credentials are in use.
+
+**Next: Phase 4 — Flutter mobile (Android-first, then iOS)** on the same frozen V1 API.

@@ -17,8 +17,7 @@ export class JoinLineDto {
 }
 
 export class JoinDealDto {
-  @IsString() customerId!: string;
-
+  // customerId is taken from the authenticated JWT, never the request body.
   @IsArray()
   @ArrayNotEmpty()
   @ValidateNested({ each: true })

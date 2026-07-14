@@ -4,6 +4,30 @@ Append-only record of meaningful decisions. Newest at top. Format: context → d
 
 ---
 
+### ADR-0014 — Customer web is a thin, phone-first client on the frozen API
+**Decision:** `apps/web` (Next.js) is a lightweight client-rendered app in a fixed
+phone-width column (max 480px, centred on desktop), dependency-free beyond React/Next
+(~90 kB first load). It consumes the same `/api/v1` the mobile apps will, holding session +
+chosen location in localStorage so weak-connection reloads don't lose state. Selection
+(basket + drop point) is persisted to sessionStorage so a customer never loses it when
+bounced through sign-in.
+**Why:** KHRATE's customers are on affordable Android phones and patchy data. Small payloads,
+big touch targets, and resilience to reload beat a heavy SPA or an over-clever SSR setup.
+One design that already reads as "mobile" also de-risks the Flutter port (same IA, same API).
+**Status:** Accepted.
+
+### ADR-0013 — Honest progress + no fake social proof, enforced in the data path
+**Decision:** Deal progress, participant counts, and savings are computed from real orders
+only and returned inline with the deal list (one request). "Be the first to join" replaces a
+"0 joined"; savings show the real everyday price struck through beside the group price;
+manual-MoMo checkout never claims instant confirmation ("a team member checks your
+reference"). Auth is required to join — `customerId` comes from the JWT, never the request body.
+**Why:** The founder's integrity principles aren't a content guideline, they're an
+architectural constraint — there is no code path that can inflate a number, and no
+unauthenticated way to place an order as someone else.
+**Status:** Accepted. The KHRATE MoMo merchant number shown at checkout is SAMPLE data;
+the real number is a founder-provided launch configuration (see Phase 3 report).
+
 ### ADR-0012 — Admin/ops platform before the customer web app (founder-directed resequencing)
 **Decision:** Phase 2 = the internal administration & operations platform; the customer web
 app follows in Phase 3, then mobile. Staff auth (email+password, scrypt) + role-based
