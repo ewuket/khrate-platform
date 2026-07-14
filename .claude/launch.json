@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "admin",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start", "--workspace", "apps/admin"],
+      "port": 3002
+    },
+    {
+      "name": "api",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start:prod", "--workspace", "apps/api"],
+      "port": 3001
+    }
+  ]
+}

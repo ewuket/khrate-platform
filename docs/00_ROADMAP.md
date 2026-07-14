@@ -34,14 +34,35 @@ per-deal jobs; `packages/contract` extraction; SMS/WhatsApp OTP delivery provide
 JWT + RBAC guards on admin/staff endpoints (endpoints exist; guard layer lands with Phase 3
 admin). These are logged here so they are not forgotten.
 
-## Phase 2 — Customer web (thin, fast)
+## Phase 2 — Admin & ops platform ✅ (done — RESEQUENCED ahead of customer web per ADR-0012)
+Founder call: build the tools KHRATE operates on before the customer surface, because
+KHRATE is an operations business. The internal platform now covers the full operating day
+(docs/operations/10):
+- **Staff auth + RBAC**: email+password (scrypt, no dependency), staff JWT, `StaffGuard` +
+  `@Roles` least-privilege guards. 9 sample staff, one per role — **verified**: packer gets
+  403 on the deal board, anonymous gets 401.
+- **Deal board** (coordinator): live progress-to-tip, cut-off, demand; **create deal** with
+  the honest-pricing guardrail (groupPrice ≤ soloPrice enforced server-side — **verified 400**).
+- **Procurement list**: aggregated, bundle-exploded, pre-sold buy list per confirmed deal.
+- **Payment review** (reviewer): manual-MoMo verification queue; verifying flips PENDING→
+  CAPTURED with the reviewer recorded as audit actor — **verified in the browser** (queue
+  2→1) and in the DB (`verifiedById` set, `PAYMENT_VERIFIED` actor = staff id, not system).
+- **Packing** (order ops): per-order pick lists, record actual quantity/substitution,
+  PREPARING→READY — with the guardrail that an **unverified order cannot be packed**
+  (**verified 400**).
+- **Deliveries** (coordinator + driver): schedule runs; drivers see only their own
+  assignments; state through to COLLECTED syncs the order — **verified** driver-scoped view
+  + collection.
+- **Catalogue** (catalogue mgr), **Reports** (finance: tip rate, realised saving, money
+  states), **Settings** (admin: configurable refund default + pricing rules, audited).
+- Next.js admin app (12 routes, all <90 kB first load) on KHRATE orange tokens — **builds,
+  driven live in-browser**.
+
+## Phase 3 — Customer web (thin, fast)
 - Next.js: zone selection, deal discovery, join a deal, cart, checkout (manual MoMo),
   order status, WhatsApp-share invite. Built on the design tokens (KHRATE orange).
-- Works on weak data / low-end devices; PWA-capable.
-
-## Phase 3 — Admin & ops platform
-- Deal board, order/packing queue, payment review, delivery board, finance, catalogue,
-  support — role-gated, audited. See [operations/10](operations/10_ADMIN_AND_OPS.md).
+- Works on weak data / low-end devices; PWA-capable. Now sits on **working** business
+  capabilities (verified payment, packing, delivery) rather than stubs.
 
 ## Phase 4 — Flutter mobile (Android-first, then iOS)
 - Consumes the frozen V1 API. Native feel, offline tolerance, push (FCM), WhatsApp share.
@@ -63,8 +84,14 @@ admin). These are logged here so they are not forgotten.
 See [08 Payments](product/08_PAYMENTS.md) and [03 Model](product/03_GROUP_BUYING_MODEL.md).
 
 ## Current status snapshot
-**Phase 0 & 1 complete.** The backend runs: a customer can log in by phone OTP, discover
-zone deals, join a group deal, and the cut-off engine confirms winners and auto-refunds
-failures — all against a live Postgres, all audited. Nothing is deployed. No paid services,
-real customer data, or real payment credentials are in use. 17 unit tests + full HTTP e2e green.
-**Next: Phase 2 — the customer web app.**
+**Phase 0, 1 & 2 complete** (Phase 2 = admin/ops, resequenced ahead of customer web per
+ADR-0012). The business can now be *operated*: staff sign in under least-privilege roles and
+run the full day — create deals, verify MoMo payments, pull the procurement buy list, pack
+orders (blocked until payment is verified), schedule and confirm deliveries, and read the few
+metrics that matter — every mutation audited to a named actor. The customer-side engine
+(OTP, discovery, join, cut-off tip/fail + auto-refund) remains green underneath.
+
+The full operating-day loop was driven end-to-end this session over HTTP **and** through the
+admin UI in a real browser against live Postgres. Nothing is deployed; no paid services, real
+customer data, or real payment credentials are in use. **Next: Phase 3 — the customer web app**,
+now built on working operational capabilities rather than stubs.

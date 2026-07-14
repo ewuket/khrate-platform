@@ -5,6 +5,7 @@
  * Run: npm run seed  (after prisma migrate)
  */
 import { PrismaClient } from '@prisma/client';
+import { hashPassword } from '../src/staff/passwords.ts';
 
 const prisma = new PrismaClient();
 
@@ -67,10 +68,27 @@ async function main(): Promise<void> {
     },
   });
 
-  const staff = await prisma.staffUser.upsert({
-    where: { email: 'ops@khrate.local' }, update: {},
-    create: { email: 'ops@khrate.local', name: 'Sample Coordinator', role: 'GROUP_COORDINATOR', passwordHash: 'SAMPLE-not-a-real-hash' },
-  });
+  // One sample staff user per role. Dev password for ALL: "khrate-dev-1234" (SAMPLE ONLY).
+  const devPassword = hashPassword('khrate-dev-1234');
+  const staffSeed: { email: string; name: string; role: string }[] = [
+    { email: 'admin@khrate.local', name: 'Sample Admin', role: 'ADMIN' },
+    { email: 'ops@khrate.local', name: 'Sample Coordinator', role: 'GROUP_COORDINATOR' },
+    { email: 'catalogue@khrate.local', name: 'Sample Catalogue', role: 'CATALOGUE_MANAGER' },
+    { email: 'packing@khrate.local', name: 'Sample Order Ops', role: 'ORDER_OPS' },
+    { email: 'payments@khrate.local', name: 'Sample Reviewer', role: 'PAYMENT_REVIEWER' },
+    { email: 'finance@khrate.local', name: 'Sample Finance', role: 'FINANCE' },
+    { email: 'delivery@khrate.local', name: 'Sample Delivery', role: 'DELIVERY_COORDINATOR' },
+    { email: 'support@khrate.local', name: 'Sample Support', role: 'SUPPORT' },
+    { email: 'driver@khrate.local', name: 'Sample Driver', role: 'DRIVER' },
+  ];
+  for (const s of staffSeed) {
+    await prisma.staffUser.upsert({
+      where: { email: s.email },
+      update: { passwordHash: devPassword, role: s.role as never },
+      create: { ...s, role: s.role as never, passwordHash: devPassword },
+    });
+  }
+  const staff = { email: 'ops@khrate.local' };
 
   // A deal that should TIP easily (threshold small) and a fresh-produce deal that needs volume.
   const now = Date.now();

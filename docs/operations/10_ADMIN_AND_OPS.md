@@ -3,6 +3,35 @@
 The internal system KHRATE actually runs on. Not a screenshot dashboard — the tool that
 lets staff operate the business with accountability and least privilege.
 
+## The operating day (the workflow the tools serve)
+
+A grocery group-buying business runs on a daily rhythm. Each numbered step maps to a tool
+surface below — the software exists to make this loop fast, accountable, and hard to get wrong.
+
+**Evening (deal day):**
+1. ~20:00 — deals hit cut-off. The engine tips or fails each one automatically.
+   Coordinator reviews outcomes on the **Deal board**; failed deals auto-refund and the
+   coordinator schedules the roll-forward deal for tomorrow.
+2. Payment Reviewer clears the **verification queue** (manual MoMo refs/proofs) so
+   confirmed demand = verified money before anything is bought.
+
+**Early morning (fulfilment day):**
+3. Coordinator exports the **procurement list** per confirmed deal (aggregated quantities
+   across all orders — this is the buy list for the wholesaler/market run).
+4. Goods arrive; **Order Ops** works the packing queue: per-order pick lists, records
+   actual weights (`fulfilledQuantity`) and substitutions, quality check, mark READY.
+5. **Delivery Coordinator** schedules the drop runs (one vehicle → one location), assigns
+   drivers, prints/loads manifests.
+
+**Midday/afternoon:**
+6. Driver delivers to the drop point; collection/receipt confirmed (order → COLLECTED).
+7. **Support** handles issues (missing/short/spoiled) → refund request → **Finance** approves
+   (never the requester) → policy-driven refund executes.
+
+**Weekly:** Leadership reviews the handful of metrics that matter (tip rate, density,
+realised saving, waste/refund rates, contribution margin) and adjusts pricing rules,
+thresholds, and zones — all as configuration, no deploys.
+
 ## Roles (least privilege — see `StaffRole` in schema)
 
 | Role | Can do | Cannot do |

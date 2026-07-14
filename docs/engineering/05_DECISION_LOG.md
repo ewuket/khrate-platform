@@ -4,6 +4,17 @@ Append-only record of meaningful decisions. Newest at top. Format: context → d
 
 ---
 
+### ADR-0012 — Admin/ops platform before the customer web app (founder-directed resequencing)
+**Decision:** Phase 2 = the internal administration & operations platform; the customer web
+app follows in Phase 3, then mobile. Staff auth (email+password, scrypt) + role-based
+guards land now, since the admin surface is the first authenticated surface.
+**Why:** KHRATE is operations-driven. Before customers arrive, staff must be able to run
+the business end-to-end: catalogue → deal creation → payment verification → packing →
+delivery → refunds → reporting. Building the customer app first would demo well and
+operate nothing. This also de-risks the customer launch: every customer-facing promise
+(verified payment, packed order, scheduled drop) is backed by a working internal tool.
+**Status:** Accepted. Roadmap re-numbered.
+
 ### ADR-0011 — Configurable refund policy, not hardcoded (founder-directed)
 **Decision:** Refund handling supports both MoMo refund and wallet credit; the *default*
 behaviour is a runtime `Policy` value (`refund.default`), not a code constant. Launch
