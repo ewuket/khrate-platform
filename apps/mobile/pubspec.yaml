@@ -1,0 +1,34 @@
+name: khrate_mobile
+description: KHRATE — grocery & group-buying customer app (Android, iOS).
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # State management — light, testable, no code-gen.
+  flutter_riverpod: ^2.5.1
+  # Networking with interceptors (auth, retry, timeouts) for weak connectivity.
+  dio: ^5.7.0
+  # Declarative routing + deep-link readiness.
+  go_router: ^14.2.7
+  # Secure token storage (Keychain / Keystore), never plain prefs for the JWT.
+  flutter_secure_storage: ^9.2.2
+  # Non-sensitive local prefs (chosen zone).
+  shared_preferences: ^2.3.2
+  # Connectivity awareness for the offline banner + retry.
+  connectivity_plus: ^6.0.5
+  # Open WhatsApp for share/support (the community-growth loop and support channel).
+  url_launcher: ^6.3.0
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true

@@ -76,8 +76,24 @@ export class GroupBuyingService {
     locationId?: string;
     addressId?: string;
     paymentRef?: string;
+    idempotencyKey?: string;
   }) {
     if (params.lines.length === 0) throw new BadRequestException('Order has no lines');
+
+    // Idempotent retry: a dropped connection may resend the same join. If we've already
+    // created an order for this key, return it unchanged — never a duplicate order/payment.
+    if (params.idempotencyKey) {
+      const existing = await this.prisma.order.findUnique({
+        where: { idempotencyKey: params.idempotencyKey },
+        include: { items: true },
+      });
+      if (existing) {
+        if (existing.customerId !== params.customerId) {
+          throw new BadRequestException('Idempotency key already used');
+        }
+        return existing;
+      }
+    }
 
     const deal = await this.prisma.groupDeal.findUnique({
       where: { id: params.dealId },
@@ -120,6 +136,7 @@ export class GroupBuyingService {
         fulfilmentOptionId: params.fulfilmentOptionId,
         locationId: params.locationId,
         addressId: params.addressId,
+        idempotencyKey: params.idempotencyKey,
         items: { create: itemsData },
       },
       include: { items: true },

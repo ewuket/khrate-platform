@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Post, UseGuards } from '@nestjs/common';
 import { GroupBuyingService } from './group-buying.service';
 import { JoinDealDto } from './dto';
 import { FulfilmentMode } from '../pricing/fulfilment';
@@ -18,7 +18,14 @@ export class GroupBuyingController {
   /** Join a deal (place a group order). Uses the authenticated customer — never a body id. */
   @Post(':id/join')
   @UseGuards(CustomerGuard)
-  join(@Param('id') id: string, @Body() dto: JoinDealDto, @CurrentCustomer() me: CustomerPrincipal) {
+  join(
+    @Param('id') id: string,
+    @Body() dto: JoinDealDto,
+    @CurrentCustomer() me: CustomerPrincipal,
+    // Idempotency-Key lets a retried request (dropped mobile connection) resolve to the
+    // same order rather than a duplicate. Optional; the mobile app always sends one.
+    @Headers('idempotency-key') idempotencyKey?: string,
+  ) {
     return this.groupBuying.join({
       dealId: id,
       customerId: me.customerId,
@@ -28,6 +35,7 @@ export class GroupBuyingController {
       locationId: dto.locationId,
       addressId: dto.addressId,
       paymentRef: dto.paymentRef,
+      idempotencyKey: idempotencyKey || undefined,
     });
   }
 

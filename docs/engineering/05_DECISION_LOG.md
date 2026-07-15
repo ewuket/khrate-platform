@@ -28,6 +28,31 @@ unauthenticated way to place an order as someone else.
 **Status:** Accepted. The KHRATE MoMo merchant number shown at checkout is SAMPLE data;
 the real number is a founder-provided launch configuration (see Phase 3 report).
 
+### ADR-0015 — Idempotent order creation for retried mobile joins
+**Decision:** `POST /deals/:id/join` accepts an optional `Idempotency-Key` header. Orders carry
+a unique `idempotencyKey`; a repeated join with the same key returns the existing order
+instead of creating a second one (and rejects key reuse across customers). The Flutter app
+generates one key per checkout attempt and reuses it across retries; its Dio client only
+retries writes that carry the key.
+**Why:** On a flaky mobile connection a request can be resent after the server already
+processed it. Without this, a customer could create duplicate orders/payments. Founder
+requirement: "clear recovery from interrupted requests so customers do not accidentally
+create duplicate payments or orders."
+**Verified:** Backend curl retry → same order; Flutter journey test asserts `retry.id == order.id`;
+DB shows exactly one order per key.
+**Status:** Accepted.
+
+### ADR-0014 — Mobile stack: Flutter (one shared codebase), Riverpod, Dio, go_router
+**Decision:** One Flutter codebase for Android + iOS (and web/desktop as run targets).
+Riverpod for state, Dio for networking (auth/timeout/retry interceptors), go_router for
+deep-link-ready navigation, flutter_secure_storage for the JWT (Keychain/Keystore),
+connectivity_plus for the offline banner. API base URL is a `--dart-define`, not a constant.
+**Why:** A single team maintains one honest customer experience across platforms; consumes
+the frozen V1 API as documented, no duplicated business logic. Android-first for the Rwanda
+launch. Native feel (Material 3, bottom nav, gestures), small footprint, weak-connectivity
+resilience — not a website in a frame.
+**Status:** Accepted.
+
 ### ADR-0012 — Admin/ops platform before the customer web app (founder-directed resequencing)
 **Decision:** Phase 2 = the internal administration & operations platform; the customer web
 app follows in Phase 3, then mobile. Staff auth (email+password, scrypt) + role-based

@@ -309,6 +309,9 @@ model Order {
   total        BigInt      @default(0)
 
   state        OrderState  @default(PENDING)
+  // Client-supplied key so a retried join (dropped mobile connection) returns the SAME
+  // order instead of creating a duplicate. Scoped per customer via the app; globally unique.
+  idempotencyKey String?   @unique
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 

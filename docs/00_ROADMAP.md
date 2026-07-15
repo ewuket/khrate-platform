@@ -80,8 +80,27 @@ it; the customer's tracking advanced to "gathering the group" and the shop hones
 the deal unlocked (1 real participant, 100%). Full audit trail attributes each action to the
 customer or the named reviewer.
 
-## Phase 4 — Flutter mobile (Android-first, then iOS)
-- Consumes the frozen V1 API. Native feel, offline tolerance, push (FCM), WhatsApp share.
+## Phase 4 — Flutter mobile (Android-first, then iOS) ✅ (code complete; device builds pending SDKs)
+One shared Flutter app (apps/mobile) on the frozen V1 API — see
+[engineering/34](engineering/34_MOBILE_ARCHITECTURE.md), ADR-0014, ADR-0015.
+- **Journeys built & wired to the real backend:** onboarding, location pick, deal discovery
+  (honest progress), deal detail + item/drop-point selection, phone-OTP sign-in (basket
+  preserved), manual-MoMo checkout + reference submission, live order tracking, WhatsApp
+  invite/support (url_launcher).
+- **Resilience:** Dio auth/timeout/retry interceptors; offline banner; **idempotent join**
+  (ADR-0015) so a dropped connection can't create a duplicate order/payment.
+- **Verified — and stated precisely (no overclaiming):**
+  - Shared Flutter code **compiled**: `flutter analyze` clean; `flutter build web --release` ✓.
+  - App **tested via web build**: rendered in a mobile-viewport browser (splash confirmed).
+  - **Integration/widget tests against the real backend: 3/3 pass** — data layer, full
+    journey (OTP→join→idempotent retry→payment-ref→tracked), LocationScreen live render.
+  - **Cross-system:** app-created order appeared in the admin Payment Review queue (correct
+    amount/reference); retried join produced **zero** duplicates (DB-confirmed, 1 order/key).
+- **NOT done (environment limits, reported honestly):** Android build/emulator/device — **not
+  possible here, no Android SDK** (`flutter doctor` Android ✗, no APK). iOS build/simulator/
+  device — **not performed**, Xcode toolchain incomplete. Push (FCM/APNs), per-platform
+  deep-link registration, and store signing are prepared in design but need founder-gated
+  services.
 
 ## Phase 5 — Hardening & launch prep
 - Security review, load sanity, monitoring, backups, runbooks.
@@ -100,17 +119,25 @@ customer or the named reviewer.
 See [08 Payments](product/08_PAYMENTS.md) and [03 Model](product/03_GROUP_BUYING_MODEL.md).
 
 ## Current status snapshot
-**Phases 0–3 complete.** KHRATE now has a working three-surface platform on one API:
+**Phases 0–4 complete.** KHRATE spans four surfaces on one API:
 - **Customer web** — discover → join a group deal → pay by MoMo → track the order.
 - **Admin/ops** — the full operating day: deal board, payment verification, procurement,
   packing, deliveries, reports, configurable policies.
 - **Backend** — group-buying engine (tip/fail + auto-refund), pluggable payments,
-  configurable pricing/refunds, phone-OTP + staff RBAC, append-only audit.
+  configurable pricing/refunds, idempotent orders, phone-OTP + staff RBAC, append-only audit.
+  12/12 unit tests pass; builds clean.
+- **Mobile (Flutter)** — one shared codebase for Android + iOS. Journeys built and verified
+  against the real backend via **web build + integration/widget tests (3/3)**; an
+  app-created order surfaced in the **admin Payment Review queue** with the right amount and
+  reference, and a retried join produced **zero duplicates** (DB-confirmed).
 
-A single customer journey was driven through a **real mobile browser** and followed all the
-way into the **admin platform and database**: the order a customer placed on the web showed
-up in the staff payment queue with the reference they typed, a reviewer verified it, and the
-customer's tracking advanced — every step audited to a named actor. Nothing is deployed; no
-paid services, real customer data, or real payment credentials are in use.
+**Precise limits (no overclaiming):** the mobile app's shared code was **compiled** and
+**tested via its web build and Dart tests against the live backend**. It was **not** built
+for or run on Android (no Android SDK — `flutter doctor` Android ✗) or iOS (Xcode toolchain
+incomplete). No APK/IPA produced; no emulator/simulator/physical-device testing.
 
-**Next: Phase 4 — Flutter mobile (Android-first, then iOS)** on the same frozen V1 API.
+Nothing is deployed; no paid services, real customer data, or real payment credentials in use.
+
+**Next: Phase 5 — Android/iOS device build-out (install Android SDK + Xcode, produce signed
+builds, emulator/simulator + physical-device testing, FCM/APNs push), then hardening &
+launch prep.**
