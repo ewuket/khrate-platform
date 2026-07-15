@@ -79,8 +79,9 @@ void main() {
     final deal = (await repo.deal(deals.first.id))!;
     expect(deal.fulfilment.first.id, isNotNull);
 
-    // 2. Sign in by phone OTP (dev code returned by the backend).
-    const phone = '+250788424242';
+    // 2. Sign in by phone OTP (dev code returned by the backend). Unique number per run
+    // so the OTP anti-abuse throttle (30s cooldown / window cap) can't make this flaky.
+    final phone = '+2507${(DateTime.now().millisecondsSinceEpoch % 100000000).toString().padLeft(8, '0')}';
     final otp = await repo.requestOtp(phone);
     await repo.verifyOtp(phone, otp['devCode']);
 

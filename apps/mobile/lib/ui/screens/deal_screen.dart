@@ -145,15 +145,20 @@ class _DealScreenState extends ConsumerState<DealScreen> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('${l.isBundle ? '🧺 ' : ''}${cleanSample(l.name)}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
             const SizedBox(height: 2),
-            Row(children: [
-              Text(rwf(l.groupPrice), style: const TextStyle(fontWeight: FontWeight.w800)),
-              if (l.saving > 0) ...[
-                const SizedBox(width: 6),
-                Text(rwf(l.soloPrice), style: TextStyle(color: Khrate.n500, fontSize: 13, decoration: TextDecoration.lineThrough)),
-                const SizedBox(width: 6),
-                Text('save ${rwf(l.saving)}', style: TextStyle(color: Khrate.fresh600, fontWeight: FontWeight.w700, fontSize: 13)),
+            // Wrap (not Row) so the price + strikethrough + saving reflow onto a second
+            // line on narrow/dense screens instead of overflowing (found on-device, Phase 5).
+            Wrap(
+              spacing: 6,
+              runSpacing: 2,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text(rwf(l.groupPrice), style: const TextStyle(fontWeight: FontWeight.w800)),
+                if (l.saving > 0) ...[
+                  Text(rwf(l.soloPrice), style: TextStyle(color: Khrate.n500, fontSize: 13, decoration: TextDecoration.lineThrough)),
+                  Text('save ${rwf(l.saving)}', style: TextStyle(color: Khrate.fresh600, fontWeight: FontWeight.w700, fontSize: 13)),
+                ],
               ],
-            ]),
+            ),
           ]),
         ),
         _stepper(l.id, q),

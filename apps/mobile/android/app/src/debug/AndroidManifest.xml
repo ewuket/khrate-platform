@@ -4,4 +4,8 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- DEBUG-ONLY: Android API 28+ blocks plain http:// by default. The local dev backend
+         is reached over http at 10.0.2.2 (host loopback from the emulator), so allow
+         cleartext for DEBUG builds only. Release builds keep cleartext blocked. -->
+    <application android:usesCleartextTraffic="true" />
 </manifest>

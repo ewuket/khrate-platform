@@ -28,6 +28,38 @@ unauthenticated way to place an order as someone else.
 **Status:** Accepted. The KHRATE MoMo merchant number shown at checkout is SAMPLE data;
 the real number is a founder-provided launch configuration (see Phase 3 report).
 
+### ADR-0018 — Launch hardening: OTP throttle, security headers, config-driven CORS
+**Decision:** (a) OTP requests are throttled per phone — a 30s resend cooldown and a cap of
+4 sends per 15-minute window — enforced via the `OtpChallenge` table (survives restarts,
+holds across instances). (b) `helmet` adds security headers (HSTS, nosniff, frameguard) to
+the JSON API. (c) CORS is permissive in dev but locks to an allow-list via `CORS_ORIGINS`
+in production. (d) Android debug builds allow cleartext HTTP to the local backend via a
+debug-only manifest; release builds keep cleartext blocked.
+**Why:** Realistic early-launch risks — SMS-bombing/enumeration on the OTP endpoint, missing
+transport/headers hardening, and over-broad CORS. Kept minimal (no new infra) per the
+"don't overengineer" directive.
+**Status:** Accepted. Verified: 2nd rapid OTP → 400; helmet headers present; 12/12 tests pass.
+
+### ADR-0017 — Dependency vulnerability posture (triaged, not force-bumped)
+**Decision:** `npm audit` shows 0 critical / 8 high, all transitive or build-time
+(`@nestjs/cli`, `glob` CLI, `picomatch`, `tmp`) or requiring usage we don't have (`multer`
+uploads — none; `lodash _.template` — never on user input; `next` Image Optimizer
+`remotePatterns` — unused). Safe (non-breaking) fixes applied; remaining ones need Next 15 /
+newer NestJS major migrations not justified before a controlled launch and not runtime-reachable.
+**Why:** Balance security with stability; avoid breaking changes on the eve of launch for
+non-reachable advisories. Revisit at the framework-upgrade milestone.
+**Status:** Accepted; documented in engineering/35 for re-review.
+
+### ADR-0016 — Android SDK provisioned locally; iOS build blocked on full Xcode
+**Decision:** Android toolchain installed via Homebrew (JDK 17) + Google command-line tools
+(SDK 35/36, build-tools, platform-tools, emulator, arm64 system image), plus a mid-range AVD.
+Flutter Android toolchain now green; debug APK builds and runs on the emulator. iOS remains
+blocked: the machine has only Command Line Tools, not full Xcode, so no iOS SDK/simulator —
+that install is a manual, App-Store, founder action.
+**Why:** Enable genuine Android on-device (emulator) testing without paid accounts. iOS needs
+Xcode which cannot be installed non-interactively.
+**Status:** Accepted. Android verified end-to-end on emulator; iOS pending Xcode.
+
 ### ADR-0015 — Idempotent order creation for retried mobile joins
 **Decision:** `POST /deals/:id/join` accepts an optional `Idempotency-Key` header. Orders carry
 a unique `idempotencyKey`; a repeated join with the same key returns the existing order

@@ -71,12 +71,14 @@ complexity (procurement, packing, driver assignment) stays hidden.
 - **Cross-system:** an order created through the app's code appeared in the admin Payment
   Review queue with the correct amount/reference; the retried join created zero duplicates.
 
-## NOT yet verified (environment limits)
+## Device build & test status (updated Phase 5 — see engineering/35)
 
-- **Android build / emulator / device:** NOT possible here — no Android SDK (`flutter doctor`
-  shows Android toolchain ✗). No APK produced, no Android device/emulator run.
-- **iOS build / simulator / device:** NOT performed — Xcode toolchain incomplete in this
-  environment.
-- Push notifications (FCM/APNs), deep-link scheme registration per platform, and store
-  signing are prepared in design but not wired — they need paid/registered services (founder
-  gate).
+- **Android:** toolchain provisioned; **debug APK built** and the **full customer journey
+  tested on an emulator** against the real backend (location → discovery → deal → OTP login →
+  join → MoMo reference → tracking), cross-checked in the admin platform. Weak-connectivity,
+  app recovery, and rotation verified. Two on-device bugs found and fixed. **No physical
+  device.**
+- **iOS:** shared code compiles, but **no full Xcode → no iOS build/simulator/device testing.**
+  Manual setup documented in engineering/35.
+- Push notifications (FCM/APNs), per-platform deep-link registration, and store signing are
+  prepared in design but not wired — they need paid/registered services (founder gate).

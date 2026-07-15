@@ -13,6 +13,10 @@ import { PrismaService } from '../prisma/prisma.service';
 export class AuthService {
   private readonly otpTtlMs = 5 * 60_000;
   private readonly maxAttempts = 5;
+  // Abuse controls (DB-backed so they survive restarts and hold across instances):
+  private readonly resendCooldownMs = 30_000; // min gap between OTP sends to one number
+  private readonly maxSendsPerWindow = 4; // cap sends per number
+  private readonly sendWindowMs = 15 * 60_000; // ...within this window
 
   constructor(
     private readonly prisma: PrismaService,
@@ -33,6 +37,19 @@ export class AuthService {
       create: { phone },
       update: {},
     });
+
+    // Throttle: protect against SMS-bombing a victim's number and enumeration/cost abuse.
+    const recent = await this.prisma.otpChallenge.findMany({
+      where: { customerId: customer.id, createdAt: { gt: new Date(Date.now() - this.sendWindowMs) } },
+      orderBy: { createdAt: 'desc' },
+      take: this.maxSendsPerWindow,
+    });
+    if (recent.length > 0 && Date.now() - recent[0].createdAt.getTime() < this.resendCooldownMs) {
+      throw new BadRequestException('Please wait a moment before requesting another code.');
+    }
+    if (recent.length >= this.maxSendsPerWindow) {
+      throw new BadRequestException('Too many code requests. Please try again in a little while.');
+    }
 
     const code = randomInt(0, 1_000_000).toString().padStart(6, '0');
     await this.prisma.otpChallenge.create({

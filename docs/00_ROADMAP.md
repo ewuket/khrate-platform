@@ -102,8 +102,28 @@ One shared Flutter app (apps/mobile) on the frozen V1 API — see
   deep-link registration, and store signing are prepared in design but need founder-gated
   services.
 
-## Phase 5 — Hardening & launch prep
-- Security review, load sanity, monitoring, backups, runbooks.
+## Phase 5 — Mobile device builds + launch hardening ✅ (Android on emulator; iOS pending Xcode)
+See [engineering/35](engineering/35_DEVICE_SETUP_AND_HARDENING.md), ADR-0016/0017/0018.
+- **Android toolchain provisioned** (JDK 17 + Google cmdline tools, SDK 35/36, emulator,
+  arm64 image, mid-range AVD) — `flutter doctor` Android ✓.
+- **Android debug APK produced** and **run on an emulator**; the **full customer journey was
+  tested on-device** against the real local backend: location → discovery → deal → OTP login
+  → join → MoMo reference → tracking. Cross-checked in the **admin Payment Review queue**.
+- **On-device found & fixed 2 real bugs:** a 47px row overflow (→ `Wrap`) and a reopen-shows-
+  onboarding race (→ splash awaits persisted state). Verified fixed on-device.
+- **Weak-connectivity** (offline banner + auto-recover), **app recovery** (reopen keeps zone +
+  session), **rotation** — all verified on the emulator.
+- **iOS:** shared code compiles, but **no Xcode → no iOS build/simulator/device testing.**
+  Manual setup steps documented (engineering/35).
+- **Hardening:** OTP throttle (anti SMS-bomb/enumeration), `helmet` security headers,
+  config-driven CORS, debug-only cleartext. Dependency audit triaged (0 critical; highs are
+  non-reachable/build-time). Backend 12/12 tests pass; web+admin+API build clean; Flutter 3/3.
+- **NOT done:** physical devices, iOS anything, FCM/APNs accounts, real MoMo/support numbers,
+  store publishing — all founder/external-gated.
+
+## Phase 6 — Pre-launch operations & deployment prep (recommended next)
+- iOS build-out (after Xcode), physical-device passes, FCM/APNs push wiring.
+- Deployment prep: containerised API, managed Postgres, backups, monitoring, runbooks.
 - Founder-gated external actions prepared but NOT executed (MoMo merchant onboarding,
   WhatsApp Business API, hosting, app-store publishing).
 
@@ -119,6 +139,12 @@ One shared Flutter app (apps/mobile) on the frozen V1 API — see
 See [08 Payments](product/08_PAYMENTS.md) and [03 Model](product/03_GROUP_BUYING_MODEL.md).
 
 ## Current status snapshot
+**Phases 0–5 complete.** KHRATE spans four surfaces on one API; the mobile app is now built
+and **tested on an Android emulator** end-to-end against the real backend, and the platform
+has had a focused launch-hardening pass. iOS awaits a manual Xcode install. Precise per-platform
+testing vocabulary and the security review are in engineering/35.
+
+_(Earlier snapshot — still true:)_
 **Phases 0–4 complete.** KHRATE spans four surfaces on one API:
 - **Customer web** — discover → join a group deal → pay by MoMo → track the order.
 - **Admin/ops** — the full operating day: deal board, payment verification, procurement,

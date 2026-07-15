@@ -17,11 +17,12 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      // Let zone/session load, then route.
-      await Future.delayed(const Duration(milliseconds: 250));
+      // Wait for persisted zone + session to actually load (no fixed-delay race), then a
+      // returning customer skips onboarding and lands straight in the shop.
+      await ref.read(zoneProvider.notifier).ready;
+      await ref.read(sessionProvider.notifier).ready;
       if (!mounted) return;
-      final zone = ref.read(zoneProvider);
-      if (zone != null) context.go('/shop');
+      if (ref.read(zoneProvider) != null) context.go('/shop');
     });
   }
 

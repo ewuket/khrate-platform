@@ -85,7 +85,15 @@ final sessionProvider = StateNotifierProvider<SessionNotifier, bool>((ref) {
 class SessionNotifier extends StateNotifier<bool> {
   SessionNotifier(this._api) : super(false);
   final ApiClient _api;
-  Future<void> load() async => state = (await _api.readToken()) != null;
+  final _ready = Completer<void>();
+  /// Completes once the persisted token has been read, so callers can wait for a
+  /// definitive signed-in/out answer instead of racing the async load.
+  Future<void> get ready => _ready.future;
+  Future<void> load() async {
+    state = (await _api.readToken()) != null;
+    if (!_ready.isCompleted) _ready.complete();
+  }
+
   void setSignedIn() => state = true;
   Future<void> signOut() async {
     await _api.clearToken();
@@ -103,6 +111,10 @@ final zoneProvider = StateNotifierProvider<ZoneNotifier, Zone?>((ref) {
 class ZoneNotifier extends StateNotifier<Zone?> {
   ZoneNotifier() : super(null);
   static const _key = 'khrate_zone_id';
+  final _ready = Completer<void>();
+  /// Completes once the persisted zone has been read (or confirmed absent). The splash
+  /// awaits this so a returning customer isn't shown onboarding again on a storage race.
+  Future<void> get ready => _ready.future;
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -112,6 +124,7 @@ class ZoneNotifier extends StateNotifier<Zone?> {
     if (id != null && name != null) {
       state = Zone(id: id, name: name, currency: cur ?? 'RWF', dropPoints: const []);
     }
+    if (!_ready.isCompleted) _ready.complete();
   }
 
   Future<void> select(Zone z) async {
