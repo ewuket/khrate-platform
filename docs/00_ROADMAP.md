@@ -121,11 +121,29 @@ See [engineering/35](engineering/35_DEVICE_SETUP_AND_HARDENING.md), ADR-0016/001
 - **NOT done:** physical devices, iOS anything, FCM/APNs accounts, real MoMo/support numbers,
   store publishing — all founder/external-gated.
 
-## Phase 6 — Pre-launch operations & deployment prep (recommended next)
-- iOS build-out (after Xcode), physical-device passes, FCM/APNs push wiring.
-- Deployment prep: containerised API, managed Postgres, backups, monitoring, runbooks.
-- Founder-gated external actions prepared but NOT executed (MoMo merchant onboarding,
-  WhatsApp Business API, hosting, app-store publishing).
+## Phase 6 — Pre-launch operations & deployment prep ✅ (launch pack done; iOS still blocked on Xcode)
+Launch hardening + deployment groundwork (ADR-0019, operations/11 runbook):
+- **Backend hardening:** production fail-fast config guard (refuses to boot on default
+  secret / missing DB URL / missing CORS), per-IP rate limiting (@nestjs/throttler), JSON
+  structured request logging (no bodies), **FINANCE-only audited refunds** (mandatory
+  reason), and a **reconciliation** endpoint (money-invariant checks). All verified live.
+- **Deployment prep:** multi-stage **non-root API Dockerfile** (standalone, reproducible via
+  a committed api-scoped lockfile), `.dockerignore`, production compose example (DB never
+  exposed, loopback-only API behind a TLS proxy), production `.env` template, and **tested
+  backup + restore scripts** (14-day retention; backup→restore→verify round-trip run live).
+- **Launch runbook (operations/11):** deploy/rollback, backups, health/monitoring, incident
+  response, refund/reconciliation procedures, staff onboarding + admin recovery, launch
+  checklist, controlled-pilot plan, support guide, data-retention/privacy.
+- **iOS: genuinely attempted, environment-blocked.** Full Xcode is not installed on this
+  machine (no `Xcode.app`, `xcode-select` → CommandLineTools, no `simctl`/simulators,
+  CocoaPods absent). iOS ATS config for local dev was added and the project is build-ready,
+  but **no iOS build was produced and nothing ran on a simulator.** Requires a manual Xcode
+  install (App Store, ~15–40 GB, founder action) — exact steps in the Phase 6 report.
+- **Container build:** attempted 6× locally; blocked by this machine's under-resourced Docker
+  VM (npm crash at 279s vs 6s on host). Dockerfile logic verified on the host; needs a
+  builder with ≥4 GB memory (runbook §1).
+- Founder-gated externals still prepared but NOT executed (MoMo merchant onboarding, push
+  service accounts, hosting, app-store publishing).
 
 ## What is deliberately NOT being built yet
 - Live GPS tracking (ADR-0007), automated MoMo API (needs founder agreement), B2B
@@ -139,10 +157,18 @@ See [engineering/35](engineering/35_DEVICE_SETUP_AND_HARDENING.md), ADR-0016/001
 See [08 Payments](product/08_PAYMENTS.md) and [03 Model](product/03_GROUP_BUYING_MODEL.md).
 
 ## Current status snapshot
-**Phases 0–5 complete.** KHRATE spans four surfaces on one API; the mobile app is now built
-and **tested on an Android emulator** end-to-end against the real backend, and the platform
-has had a focused launch-hardening pass. iOS awaits a manual Xcode install. Precise per-platform
-testing vocabulary and the security review are in engineering/35.
+**Phases 0–6 complete.** KHRATE spans four surfaces on one API. The mobile app is built and
+**tested on an Android emulator** end-to-end against the real backend; the platform has a
+launch-hardening pass, a deployment/backup toolchain, and a full operations runbook. **iOS
+build + simulator testing remain genuinely undone** — full Xcode is not installed on this
+machine (manual founder step). Precise per-platform testing vocabulary and the security
+review are in engineering/35; the launch runbook is operations/11.
+
+Verification this phase (all green unless noted): backend 12/12 unit tests + build; customer
+web + admin builds ✓; Flutter analyze clean + 3/3 integration tests vs live backend; Android
+debug APK builds; backup→restore round-trip + reconciliation `clean`. **Not done:** iOS build/
+simulator (no Xcode); local container image (Docker VM under-resourced — Dockerfile verified
+on host).
 
 _(Earlier snapshot — still true:)_
 **Phases 0–4 complete.** KHRATE spans four surfaces on one API:
@@ -164,6 +190,11 @@ incomplete). No APK/IPA produced; no emulator/simulator/physical-device testing.
 
 Nothing is deployed; no paid services, real customer data, or real payment credentials in use.
 
+**Next: Phase 7 — iOS build-out once Xcode is installed (simulator journey testing), then
+physical-device passes on both platforms and the founder-gated launch steps (real MoMo/
+support numbers, hosting on a ≥4 GB host, push accounts).**
+
+_(Superseded planning note from Phase 4:)_
 **Next: Phase 5 — Android/iOS device build-out (install Android SDK + Xcode, produce signed
 builds, emulator/simulator + physical-device testing, FCM/APNs push), then hardening &
 launch prep.**

@@ -7,7 +7,14 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Khrate Mobile</string>
+	<string>KHRATE</string>
+	<!-- ATS: permit cleartext to LOCAL hosts only (the dev backend on localhost:3001 from
+	     the simulator). This does NOT allow arbitrary http — remote endpoints stay HTTPS-only. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

@@ -1,0 +1,39 @@
+# KHRATE production-shaped compose — EXAMPLE ONLY, for a single-host controlled pilot.
+# Copy to docker-compose.prod.yml on the server and fill the env file (never commit it).
+# Nothing here exposes Postgres publicly; only the API port is published, and in a real
+# deployment it should sit behind a TLS reverse proxy (Caddy/Nginx) — see operations/11.
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    env_file: .env.production   # DATABASE_URL, JWT_SECRET, CORS_ORIGINS, PAYMENT_PROVIDER
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+    ports:
+      - "127.0.0.1:3001:3001"   # loopback only — TLS proxy terminates public traffic
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: khrate
+      POSTGRES_USER: khrate
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env.production}
+    volumes:
+      - khrate_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U khrate"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # NOTE: no `ports:` — the database is never reachable from outside the host.
+
+volumes:
+  khrate_pgdata:

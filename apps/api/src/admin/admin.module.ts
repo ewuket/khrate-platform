@@ -9,6 +9,7 @@ import {
   AdminDeliveriesController,
   AdminCatalogueController,
   AdminConfigController,
+  AdminRefundsController,
   AdminReportsController,
 } from './admin.controllers';
 import { StaffController } from '../staff/staff.controller';
@@ -35,6 +36,7 @@ import { PaymentsModule } from '../payments/payments.module';
     AdminDeliveriesController,
     AdminCatalogueController,
     AdminConfigController,
+    AdminRefundsController,
     AdminReportsController,
   ],
   providers: [AdminService, StaffGuard, TimelineService],

@@ -82,3 +82,26 @@ complexity (procurement, packing, driver assignment) stays hidden.
   Manual setup documented in engineering/35.
 - Push notifications (FCM/APNs), per-platform deep-link registration, and store signing are
   prepared in design but not wired — they need paid/registered services (founder gate).
+
+## Push notifications — prepared, not wired (founder gate)
+
+**What push is for at KHRATE (in value order):** "your group tipped / didn't tip" (the
+moment customers care most), "payment confirmed", "order at drop point — collect by 19:00".
+These map to existing `TimelineEvent`s, so the backend hook is a small consumer that posts
+to FCM when those events are written — no architectural change.
+
+**Setup when approved (all steps, nothing hidden):**
+1. Create a Firebase project (free tier suffices; Google account required — **founder
+   approval**). Add Android app `rw.khrate.khrate_mobile` → download `google-services.json`
+   into `android/app/` (git-ignored; treat as a credential).
+2. iOS: needs the **paid Apple Developer Program** for APNs keys. Upload the APNs auth key
+   to Firebase; add `GoogleService-Info.plist` to `ios/Runner/` (git-ignored).
+3. App: add `firebase_core` + `firebase_messaging`, request permission at first *useful*
+   moment (after first order — not on first launch), send the device token to a new
+   `POST /me/device-tokens` endpoint.
+4. Backend: store tokens per customer; a small notifier service subscribes to DEAL_TIPPED /
+   DEAL_FAILED / PAYMENT_VERIFIED / DELIVERY_* events and calls FCM HTTP v1.
+5. Never put order contents or amounts in the notification body (lock-screen privacy) —
+   "Your KHRATE group succeeded 🎉 Open the app" is enough.
+
+Until then, the app's polling on the order screen (15s) plus WhatsApp cover the pilot.

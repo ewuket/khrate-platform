@@ -19,6 +19,7 @@ import {
   IsOptional,
   IsString,
   Min,
+  MinLength,
   ValidateNested,
 } from 'class-validator';
 import { AdminService } from './admin.service';
@@ -326,6 +327,51 @@ export class AdminConfigController {
 }
 
 // ---------------------------------------------------------------------------
+// Refund control — FINANCE only, mandatory reason, fully audited
+// ---------------------------------------------------------------------------
+
+class ManualRefundDto {
+  @IsString() @MinLength(10, { message: 'A clear reason (≥10 chars) is required for every refund' })
+  reason!: string;
+  @IsOptional() @IsIn(['MOMO_REFUND', 'WALLET_CREDIT']) destination?: 'MOMO_REFUND' | 'WALLET_CREDIT';
+}
+
+@Controller('admin/refunds')
+@UseGuards(StaffGuard)
+@Roles('FINANCE')
+export class AdminRefundsController {
+  constructor(
+    private readonly payments: PaymentsService,
+    private readonly timeline: TimelineService,
+  ) {}
+
+  /**
+   * Manual refund for a specific order (customer complaint, shortage, spoilage).
+   * Guardrails: FINANCE role only (Support raises the request, Finance executes — two
+   * pairs of eyes), a reason is mandatory, and both the refund and the reason land in the
+   * append-only audit trail under the named finance actor.
+   */
+  @Post(':orderId')
+  async refund(
+    @Param('orderId') orderId: string,
+    @Body() dto: ManualRefundDto,
+    @Staff() staff: StaffPrincipal,
+  ) {
+    const result = await this.payments.refund(orderId, {
+      customerPreference: dto.destination,
+      actor: staff.staffId,
+    });
+    await this.timeline.record({
+      type: 'MANUAL_REFUND_REASON',
+      orderId,
+      actor: staff.staffId,
+      data: { reason: dto.reason, destination: result.destination },
+    });
+    return { ok: true, destination: result.destination };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Reports — ADMIN / FINANCE
 // ---------------------------------------------------------------------------
 
@@ -333,10 +379,48 @@ export class AdminConfigController {
 @UseGuards(StaffGuard)
 @Roles('FINANCE')
 export class AdminReportsController {
-  constructor(private readonly admin: AdminService) {}
+  constructor(
+    private readonly admin: AdminService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Get()
   report() {
     return this.admin.report();
+  }
+
+  /**
+   * Reconciliation: the checks Finance runs before/after each operating day.
+   * - captured payments whose amount ≠ the order total (money mismatch),
+   * - orders in fulfilment states without a captured payment (goods moving without money),
+   * - refunded payments whose order isn't marked refunded/cancelled (state drift).
+   */
+  @Get('reconciliation')
+  async reconciliation() {
+    const [mismatched, unpaidFulfilling, refundDrift] = await Promise.all([
+      this.prisma.payment.findMany({
+        where: { state: 'CAPTURED' },
+        include: { order: { select: { total: true, state: true } } },
+      }).then((rows) => rows.filter((p) => p.amount !== p.order.total).map((p) => ({
+        orderId: p.orderId, paymentAmount: Number(p.amount), orderTotal: Number(p.order.total),
+      }))),
+      this.prisma.order.findMany({
+        where: {
+          state: { in: ['PREPARING', 'READY', 'DELIVERED', 'COLLECTED'] },
+          OR: [{ payment: null }, { payment: { state: { not: 'CAPTURED' } } }],
+        },
+        select: { id: true, state: true },
+      }),
+      this.prisma.payment.findMany({
+        where: { state: 'REFUNDED', order: { state: { notIn: ['REFUNDED', 'CANCELLED'] } } },
+        select: { orderId: true, order: { select: { state: true } } },
+      }),
+    ]);
+    return {
+      clean: mismatched.length === 0 && unpaidFulfilling.length === 0 && refundDrift.length === 0,
+      amountMismatches: mismatched,
+      fulfillingWithoutCapturedPayment: unpaidFulfilling,
+      refundedPaymentsWithLiveOrders: refundDrift,
+    };
   }
 }

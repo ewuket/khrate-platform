@@ -28,6 +28,23 @@ unauthenticated way to place an order as someone else.
 **Status:** Accepted. The KHRATE MoMo merchant number shown at checkout is SAMPLE data;
 the real number is a founder-provided launch configuration (see Phase 3 report).
 
+### ADR-0019 — Phase 6 launch pack: fail-fast config, rate limit, refund control, reconciliation, single-host deploy
+**Decision:** (a) The API refuses to boot in production with a default JWT secret or missing
+DATABASE_URL/CORS_ORIGINS. (b) Global per-IP throttle (300 req/min) via @nestjs/throttler.
+(c) Structured request logging (JSON lines in prod; no bodies — privacy). (d) Manual refunds
+are FINANCE-only with a mandatory ≥10-char reason, audited (`MANUAL_REFUND_REASON`).
+(e) A reconciliation endpoint checks money invariants (payment=total; no fulfilment without
+captured payment; no refund drift). (f) Deployment = one host, Docker Compose (multi-stage
+non-root API image running `prisma migrate deploy` on start, loopback-only port behind a TLS
+proxy, DB never exposed), with tested backup/restore scripts (14-day retention) and a full
+launch runbook (operations/11).
+**Why:** the highest-probability early-launch failures are config mistakes, money-state
+drift, unaccountable refunds, and unrecoverable data loss — not scale. Deliberately no new
+infrastructure (no k8s, no queues) per the controlled-launch directive.
+**Verified:** prod boot with default secret exits 1; refund guardrails 400/403; reconciliation
+`clean:true`; X-RateLimit headers live; backup→restore round-trip on live Postgres.
+**Status:** Accepted.
+
 ### ADR-0018 — Launch hardening: OTP throttle, security headers, config-driven CORS
 **Decision:** (a) OTP requests are throttled per phone — a 30s resend cooldown and a cap of
 4 sends per 15-minute window — enforced via the `OtpChallenge` table (survives restarts,

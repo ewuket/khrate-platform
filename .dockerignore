@@ -1,0 +1,14 @@
+node_modules
+**/node_modules
+**/dist
+**/.next
+**/build
+apps/mobile
+docs
+operations
+.git
+.env
+.env.*
+!.env.example
+*.log
+.dart_tool
